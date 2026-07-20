@@ -21,9 +21,3 @@ the shebang:
 Tags follow the upstream library versioning (`v0.17.5`). Base images pin
 the version via the `BASHIO_VERSION` build argument and fetch the release
 archive of this repository at build time.
-
-## License
-
-MIT — see [LICENSE.md](LICENSE.md). This repository redistributes the
-library under the terms of that license; the copyright notice is
-preserved unmodified.
