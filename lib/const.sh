@@ -2,10 +2,10 @@
 # shellcheck disable=SC2004,SC2034
 # ==============================================================================
 # ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # Defaults
@@ -18,8 +18,8 @@ readonly __BASHIO_DEFAULT_SUPERVISOR_API="http://supervisor"
 readonly __BASHIO_DEFAULT_SUPERVISOR_TOKEN=""
 
 # Exit codes
-readonly __BASHIO_EXIT_OK=0    # Successful termination
-readonly __BASHIO_EXIT_NOK=1   # Termination with errors
+readonly __BASHIO_EXIT_OK=0  # Successful termination
+readonly __BASHIO_EXIT_NOK=1 # Termination with errors
 
 # Log levels
 readonly __BASHIO_LOG_LEVEL_ALL=8
@@ -44,7 +44,7 @@ readonly -A __BASHIO_LOG_LEVELS=(
 )
 
 # Colors
-readonly __BASHIO_COLORS_ESCAPE="\033[";
+readonly __BASHIO_COLORS_ESCAPE="\033["
 readonly __BASHIO_COLORS_RESET="${__BASHIO_COLORS_ESCAPE}0m"
 readonly __BASHIO_COLORS_DEFAULT="${__BASHIO_COLORS_ESCAPE}39m"
 readonly __BASHIO_COLORS_BLACK="${__BASHIO_COLORS_ESCAPE}30m"

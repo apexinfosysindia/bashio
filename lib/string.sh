@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -16,7 +16,7 @@
 function bashio::string.lower() {
     local string="${1}"
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     printf "%s" "${string,,}"
 }
@@ -30,13 +30,13 @@ function bashio::string.lower() {
 function bashio::string.upper() {
     local string="${1}"
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     printf "%s" "${string^^}"
 }
 
 # ------------------------------------------------------------------------------
-# Replaces parts of the string with an other string.
+# Replaces parts of the string with another string.
 #
 # Arguments:
 #   $1 String to make replacements in
@@ -48,9 +48,9 @@ function bashio::string.replace() {
     local needle="${2}"
     local replacement="${3}"
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
-    printf "%s" "${string//${needle}/${replacement}}"
+    printf "%s" "${string//"${needle}"/${replacement}}"
 }
 
 # ------------------------------------------------------------------------------
@@ -62,7 +62,7 @@ function bashio::string.replace() {
 bashio::string.length() {
     local string="${1}"
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     printf "%s" "${#string}"
 }
@@ -71,13 +71,13 @@ bashio::string.length() {
 # Returns a substring of a string.
 #
 # stringZ=abcABC123ABCabc
-# apex.string.substring "${stringZ}" 0      # abcABC123ABCabc
-# apex.string.substring "${stringZ}" 1      # bcABC123ABCabc
-# apex.string.substring "${stringZ}" 7      # 23ABCabc
-# apex.string.substring "${stringZ}" 7 3    # 23AB
+# bashio::string.substring "${stringZ}" 0      # abcABC123ABCabc
+# bashio::string.substring "${stringZ}" 1      # bcABC123ABCabc
+# bashio::string.substring "${stringZ}" 7      # 23ABCabc
+# bashio::string.substring "${stringZ}" 7 3    # 23A
 #
 # Arguments:
-#   $1 String to return a substring off
+#   $1 String to return a substring of
 #   $2 Position to start
 #   $3 Length of the substring (optional)
 # ------------------------------------------------------------------------------
@@ -86,7 +86,7 @@ bashio::string.substring() {
     local position="${2}"
     local length="${3:-}"
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${length}"; then
         printf "%s" "${string:${position}:${length}}"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -13,17 +13,19 @@
 # Arguments:
 #   $1 JSON string or path to a JSON file
 #   $2 jq filter (optional)
+#   $@ Extra jq arguments, e.g. --arg/--argjson to pass values safely (optional)
 # ------------------------------------------------------------------------------
 function bashio::jq() {
     local data=${1}
-    local filter=${2:-}
+    local filter=${2:-.}
+    local arguments=("${@:3}")
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if [[ -f "${data}" ]]; then
-        jq --raw-output -c -M "$filter" "${data}"
+        jq --raw-output -c -M "${arguments[@]}" "$filter" "${data}"
     else
-        jq --raw-output -c -M "$filter" <<< "${data}"
+        jq --raw-output -c -M "${arguments[@]}" "$filter" <<<"${data}"
     fi
 }
 
@@ -36,11 +38,13 @@ function bashio::jq() {
 # ------------------------------------------------------------------------------
 function bashio::jq.exists() {
     local data=${1}
-    local filter=${2:-}
+    local filter=${2:-.}
+    local value
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
-    if [[ $(bashio::jq "${data}" "${filter}") = "null" ]]; then
+    if ! value=$(bashio::jq "${data}" "${filter}") ||
+        bashio::var.equals "${value}" "null"; then
         return "${__BASHIO_EXIT_NOK}"
     fi
 
@@ -56,15 +60,14 @@ function bashio::jq.exists() {
 # ------------------------------------------------------------------------------
 function bashio::jq.has_value() {
     local data=${1}
-    local filter=${2:-}
+    local filter=${2:-.}
     local value
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
-    value=$(bashio::jq "${data}" \
-        "${filter} | if (. == {} or . == []) then empty else . end // empty")
-
-    if ! bashio::var.has_value "${value}"; then
+    if ! value=$(bashio::jq "${data}" \
+        "${filter} | if (. == {} or . == []) then empty else . end // empty") ||
+        ! bashio::var.has_value "${value}"; then
         return "${__BASHIO_EXIT_NOK}"
     fi
 
@@ -81,16 +84,15 @@ function bashio::jq.has_value() {
 # ------------------------------------------------------------------------------
 function bashio::jq.is() {
     local data=${1}
-    local filter=${2}
+    local filter=${2:-.}
     local type=${3}
     local value
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
-    value=$(bashio::jq "${data}" \
-        "${filter} | if type==\"${type}\" then true else false end")
-
-    if [[ "${value}" = "false" ]]; then
+    if ! value=$(bashio::jq "${data}" \
+        "${filter} | if type==\"${type}\" then true else false end") ||
+        [[ "${value}" != "true" ]]; then
         return "${__BASHIO_EXIT_NOK}"
     fi
 
@@ -108,7 +110,7 @@ function bashio::jq.is_boolean() {
     local data=${1}
     local filter=${2:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
     bashio::jq.is "${data}" "${filter}" "boolean"
 }
 
@@ -123,7 +125,7 @@ function bashio::jq.is_string() {
     local data=${1}
     local filter=${2:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
     bashio::jq.is "${data}" "${filter}" "string"
 }
 
@@ -138,7 +140,7 @@ function bashio::jq.is_object() {
     local data=${1}
     local filter=${2:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
     bashio::jq.is "${data}" "${filter}" "object"
 }
 
@@ -153,7 +155,7 @@ function bashio::jq.is_number() {
     local data=${1}
     local filter=${2:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
     bashio::jq.is "${data}" "${filter}" "number"
 }
 
@@ -168,6 +170,6 @@ function bashio::jq.is_array() {
     local data=${1}
     local filter=${2:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
     bashio::jq.is "${data}" "${filter}" "array"
 }

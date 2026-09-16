@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -48,13 +48,13 @@ function bashio::core.rebuild() {
 function bashio::core.update() {
     local version=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${version}"; then
         version=$(bashio::var.json version "${version}")
-        bashio::api.supervisor POST /core/update "${version}"
+        bashio::api.supervisor POST /core/update "${version}" || return "${__BASHIO_EXIT_NOK}"
     else
-        bashio::api.supervisor POST /core/update
+        bashio::api.supervisor POST /core/update || return "${__BASHIO_EXIT_NOK}"
     fi
     bashio::cache.flush_all
 }
@@ -76,7 +76,7 @@ function bashio::core.logs() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns a JSON object with generic Home Asssistant information.
+# Returns a JSON object with generic ApexOS information.
 #
 # Arguments:
 #   $1 Cache key to store results in (optional)
@@ -91,8 +91,13 @@ function bashio::core() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'core.info' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'core.info'; then
@@ -109,9 +114,18 @@ function bashio::core() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'core.info' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"
@@ -166,11 +180,11 @@ function bashio::core.machine() {
 function bashio::core.image() {
     local image=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${image}"; then
         image=$(bashio::var.json image "${image}")
-        bashio::api.supervisor POST /core/options "${image}"
+        bashio::api.supervisor POST /core/options "${image}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::core 'core.info.image' '.image'
@@ -191,14 +205,14 @@ function bashio::core.custom() {
 function bashio::core.boot() {
     bashio::log.trace "${FUNCNAME[0]}"
     bashio::core 'core.info.boot' '.boot // false'
+}
 
 # ------------------------------------------------------------------------------
-}
 # Returns the port number on which ApexOS is running.
 # ------------------------------------------------------------------------------
 function bashio::core.port() {
     bashio::log.trace "${FUNCNAME[0]}"
-    bashio::core 'core.port' '.port'
+    bashio::core 'core.info.port' '.port'
 }
 
 # ------------------------------------------------------------------------------
@@ -218,11 +232,15 @@ function bashio::core.ssl() {
 function bashio::core.watchdog() {
     local watchdog=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${watchdog}"; then
-        watchdog=$(bashio::var.json watchdog "^${watchdog}")
-        bashio::api.supervisor POST /core/options "${watchdog}"
+        if bashio::var.true "${watchdog}"; then
+            watchdog=$(bashio::var.json watchdog "^true")
+        else
+            watchdog=$(bashio::var.json watchdog "^false")
+        fi
+        bashio::api.supervisor POST /core/options "${watchdog}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::core 'core.info.watchdog' '.watchdog // false'
@@ -245,8 +263,13 @@ function bashio::core.stats() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'core.stats' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'core.stats'; then
@@ -263,9 +286,18 @@ function bashio::core.stats() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'core.stats' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"

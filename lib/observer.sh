@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -16,13 +16,13 @@
 function bashio::observer.update() {
     local version=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${version}"; then
         version=$(bashio::var.json version "${version}")
-        bashio::api.supervisor POST /observer/update "${version}"
+        bashio::api.supervisor POST /observer/update "${version}" || return "${__BASHIO_EXIT_NOK}"
     else
-        bashio::api.supervisor POST /observer/update
+        bashio::api.supervisor POST /observer/update || return "${__BASHIO_EXIT_NOK}"
     fi
     bashio::cache.flush_all
 }
@@ -43,8 +43,13 @@ function bashio::observer() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'observer.info' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'observer.info'; then
@@ -61,9 +66,18 @@ function bashio::observer() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'observer.info' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"
@@ -117,8 +131,13 @@ function bashio::observer.stats() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'observer.stats' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'observer.stats'; then
@@ -135,9 +154,18 @@ function bashio::observer.stats() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'observer.stats' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"

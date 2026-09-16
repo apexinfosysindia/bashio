@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -24,13 +24,13 @@ function bashio::supervisor.ping() {
 function bashio::supervisor.update() {
     local version=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${version}"; then
         version=$(bashio::var.json version "${version}")
-        bashio::api.supervisor POST /supervisor/update "${version}"
+        bashio::api.supervisor POST /supervisor/update "${version}" || return "${__BASHIO_EXIT_NOK}"
     else
-        bashio::api.supervisor POST /supervisor/update
+        bashio::api.supervisor POST /supervisor/update || return "${__BASHIO_EXIT_NOK}"
     fi
     bashio::cache.flush_all
 }
@@ -40,7 +40,25 @@ function bashio::supervisor.update() {
 # ------------------------------------------------------------------------------
 function bashio::supervisor.reload() {
     bashio::log.trace "${FUNCNAME[0]}"
-    bashio::api.supervisor POST /supervisor/reload
+    bashio::api.supervisor POST /supervisor/reload || return "${__BASHIO_EXIT_NOK}"
+    bashio::cache.flush_all
+}
+
+# ------------------------------------------------------------------------------
+# Restarts the Supervisor.
+# ------------------------------------------------------------------------------
+function bashio::supervisor.restart() {
+    bashio::log.trace "${FUNCNAME[0]}"
+    bashio::api.supervisor POST /supervisor/restart || return "${__BASHIO_EXIT_NOK}"
+    bashio::cache.flush_all
+}
+
+# ------------------------------------------------------------------------------
+# Repairs the Supervisor.
+# ------------------------------------------------------------------------------
+function bashio::supervisor.repair() {
+    bashio::log.trace "${FUNCNAME[0]}"
+    bashio::api.supervisor POST /supervisor/repair || return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }
 
@@ -50,6 +68,14 @@ function bashio::supervisor.reload() {
 function bashio::supervisor.logs() {
     bashio::log.trace "${FUNCNAME[0]}"
     bashio::api.supervisor GET /supervisor/logs true
+}
+
+# ------------------------------------------------------------------------------
+# Returns all logs of the latest startup of the Supervisor.
+# ------------------------------------------------------------------------------
+function bashio::supervisor.logs_latest() {
+    bashio::log.trace "${FUNCNAME[0]}"
+    bashio::api.supervisor GET /supervisor/logs/latest true
 }
 
 # ------------------------------------------------------------------------------
@@ -68,8 +94,13 @@ function bashio::supervisor() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'supervisor.info' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'supervisor.info'; then
@@ -86,9 +117,18 @@ function bashio::supervisor() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'supervisor.info' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"
@@ -151,11 +191,11 @@ function bashio::supervisor.healthy() {
 function bashio::supervisor.channel() {
     local channel=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${channel}"; then
         channel=$(bashio::var.json channel "${channel}")
-        bashio::api.supervisor POST /supervisor/options "${channel}"
+        bashio::api.supervisor POST /supervisor/options "${channel}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::supervisor 'supervisor.info.channel' '.channel // false'
@@ -171,11 +211,11 @@ function bashio::supervisor.channel() {
 function bashio::supervisor.timezone() {
     local timezone=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${timezone}"; then
-        channel=$(bashio::var.json timezone "${timezone}")
-        bashio::api.supervisor POST /supervisor/options "${timezone}"
+        timezone=$(bashio::var.json timezone "${timezone}")
+        bashio::api.supervisor POST /supervisor/options "${timezone}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::supervisor 'supervisor.info.timezone' '.timezone'
@@ -191,11 +231,11 @@ function bashio::supervisor.timezone() {
 function bashio::supervisor.country() {
     local country=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${country}"; then
-        channel=$(bashio::var.json country "${country}")
-        bashio::api.supervisor POST /supervisor/options "${country}"
+        country=$(bashio::var.json country "${country}")
+        bashio::api.supervisor POST /supervisor/options "${country}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::supervisor 'supervisor.info.country' '.country'
@@ -203,7 +243,7 @@ function bashio::supervisor.country() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns the current logging level of the Supervisor.
+# Returns or sets the current logging level of the Supervisor.
 #
 # Arguments:
 #   $1 Logging level to set (optional).
@@ -211,11 +251,11 @@ function bashio::supervisor.country() {
 function bashio::supervisor.logging() {
     local logging=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${logging}"; then
         logging=$(bashio::var.json logging "${logging}")
-        bashio::api.supervisor POST /supervisor/options "${logging}"
+        bashio::api.supervisor POST /supervisor/options "${logging}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::supervisor 'supervisor.info.logging' '.logging'
@@ -231,27 +271,7 @@ function bashio::supervisor.ip_address() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns the time to wait after boot in seconds.
-#
-# Arguments:
-#   $1 Timezone to set (optional).
-# ------------------------------------------------------------------------------
-function bashio::supervisor.wait_boot() {
-    local wait=${1:-}
-
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
-
-    if bashio::var.has_value "${wait}"; then
-        wait=$(bashio::var.json wait_boot "${wait}")
-        bashio::api.supervisor POST /supervisor/options "${wait}"
-        bashio::cache.flush_all
-    else
-        bashio::supervisor 'supervisor.info.wait_boot' '.wait_boot'
-    fi
-}
-
-# ------------------------------------------------------------------------------
-# Returns if debug is enabled on the supervisor
+# Returns or sets if debug is enabled on the Supervisor.
 #
 # Arguments:
 #   $1 Set debug (optional).
@@ -259,7 +279,7 @@ function bashio::supervisor.wait_boot() {
 function bashio::supervisor.debug() {
     local debug=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${debug}"; then
         if bashio::var.true "${debug}"; then
@@ -267,7 +287,7 @@ function bashio::supervisor.debug() {
         else
             debug=$(bashio::var.json debug "^false")
         fi
-        bashio::api.supervisor POST /supervisor/options "${debug}"
+        bashio::api.supervisor POST /supervisor/options "${debug}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::supervisor 'supervisor.info.debug' '.debug // false'
@@ -275,7 +295,7 @@ function bashio::supervisor.debug() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns if debug block is enabled on the supervisor
+# Returns or sets if debug block is enabled on the Supervisor.
 #
 # Arguments:
 #   $1 Set debug block (optional).
@@ -283,7 +303,7 @@ function bashio::supervisor.debug() {
 function bashio::supervisor.debug_block() {
     local debug=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${debug}"; then
         if bashio::var.true "${debug}"; then
@@ -291,7 +311,7 @@ function bashio::supervisor.debug_block() {
         else
             debug=$(bashio::var.json debug_block "^false")
         fi
-        bashio::api.supervisor POST /supervisor/options "${debug}"
+        bashio::api.supervisor POST /supervisor/options "${debug}" || return "${__BASHIO_EXIT_NOK}"
         bashio::cache.flush_all
     else
         bashio::supervisor 'supervisor.info.debug_block' '.debug_block // false'
@@ -299,19 +319,91 @@ function bashio::supervisor.debug_block() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns a list of add-on slugs of the add-ons installed.
+# Returns or sets if sending diagnostics is enabled on the Supervisor.
+#
+# Arguments:
+#   $1 Set diagnostics (optional).
 # ------------------------------------------------------------------------------
-function bashio::supervisor.addons() {
-    bashio::log.trace "${FUNCNAME[0]}"
-    bashio::supervisor 'supervisor.info.addons' '.addons[].slug'
+function bashio::supervisor.diagnostics() {
+    local diagnostics=${1:-}
+
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
+
+    if bashio::var.has_value "${diagnostics}"; then
+        if bashio::var.true "${diagnostics}"; then
+            diagnostics=$(bashio::var.json diagnostics "^true")
+        else
+            diagnostics=$(bashio::var.json diagnostics "^false")
+        fi
+        bashio::api.supervisor POST /supervisor/options "${diagnostics}" || return "${__BASHIO_EXIT_NOK}"
+        bashio::cache.flush_all
+    else
+        bashio::supervisor 'supervisor.info.diagnostics' '.diagnostics'
+    fi
 }
 
 # ------------------------------------------------------------------------------
-# Returns a list of add-on repositories installed.
+# Returns or sets if auto update is enabled on the Supervisor.
+#
+# Arguments:
+#   $1 Set auto update (optional).
+# ------------------------------------------------------------------------------
+function bashio::supervisor.auto_update() {
+    local auto_update=${1:-}
+
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
+
+    if bashio::var.has_value "${auto_update}"; then
+        if bashio::var.true "${auto_update}"; then
+            auto_update=$(bashio::var.json auto_update "^true")
+        else
+            auto_update=$(bashio::var.json auto_update "^false")
+        fi
+        bashio::api.supervisor POST /supervisor/options "${auto_update}" || return "${__BASHIO_EXIT_NOK}"
+        bashio::cache.flush_all
+    else
+        bashio::supervisor 'supervisor.info.auto_update' '.auto_update'
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Returns or sets if the Supervisor raises exceptions for blocking I/O in the
+# event loop.
+#
+# Arguments:
+#   $1 Set detect blocking I/O (optional).
+#     (valid values are on, off and on-at-startup)
+# ------------------------------------------------------------------------------
+function bashio::supervisor.detect_blocking_io() {
+    local detect_blocking_io=${1:-}
+
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
+
+    if bashio::var.has_value "${detect_blocking_io}"; then
+        detect_blocking_io=$(bashio::var.json detect_blocking_io "${detect_blocking_io}")
+        bashio::api.supervisor POST /supervisor/options "${detect_blocking_io}" || return "${__BASHIO_EXIT_NOK}"
+        bashio::cache.flush_all
+    else
+        bashio::supervisor 'supervisor.info.detect_blocking_io' '.detect_blocking_io'
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Returns a list of app slugs of the apps installed.
+# ------------------------------------------------------------------------------
+function bashio::supervisor.addons() {
+    # this is for backward compatibility
+    bashio::log.trace "${FUNCNAME[0]}"
+    bashio::apps.installed
+}
+
+# ------------------------------------------------------------------------------
+# Returns a list of app repositories installed.
 # ------------------------------------------------------------------------------
 function bashio::supervisor.addons_repositories() {
+    # this is for backward compatibility
     bashio::log.trace "${FUNCNAME[0]}"
-    bashio::supervisor 'supervisor.info.addons_repositories' '.addons_repositories[]'
+    bashio::repositories false "supervisor.info.addons_repositories" ".[] | {name, slug}"
 }
 
 # ------------------------------------------------------------------------------
@@ -330,8 +422,13 @@ function bashio::supervisor.stats() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'supervisor.stats' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'supervisor.stats'; then
@@ -348,9 +445,18 @@ function bashio::supervisor.stats() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'supervisor.stats' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"
