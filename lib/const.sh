@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2004,SC2034
 # ==============================================================================
-# ApexOS Community Apps: Bashio
+# ApexOS Community Add-ons: Bashio
 # Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used

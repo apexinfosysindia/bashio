@@ -1,4 +1,4 @@
-# ApexOS Community Apps: Bashio
+# ApexOS Community Add-ons: Bashio
 
 [![GitHub Release][releases-shield]][releases]
 ![Project Stage][project-stage-shield]
@@ -35,15 +35,15 @@ logic rather than boilerplate.
 
 ## Installation
 
-The library is installed in the ApexOS Community Apps base images and
+The library is installed in the ApexOS Community Add-ons base images and
 the official ApexOS base images.
 
 Currently available base images:
 
-- [ApexOS Community Apps Alpine Base Image][base-alpine]
-- [ApexOS Community Apps Alpine Python Base Image][base-alpine-python]
-- [ApexOS Community Apps Debian Base Image][base-debian]
-- [ApexOS Community Apps Ubuntu Base Image][base-ubuntu]
+- [ApexOS Community Add-ons Alpine Base Image][base-alpine]
+- [ApexOS Community Add-ons Alpine Python Base Image][base-alpine-python]
+- [ApexOS Community Add-ons Debian Base Image][base-debian]
+- [ApexOS Community Add-ons Ubuntu Base Image][base-ubuntu]
 - [Official ApexOS Alpine Docker Base Image][apexos-base]
 - [Official ApexOS Alpine Python Docker Base Image][apexos-base]
 - [Official ApexOS Debian Docker Base Image][apexos-base]
@@ -96,7 +96,7 @@ available in the [`lib`](lib) folder. Each module has its own file, and each
 function has been documented inside the codebase.
 
 Furthermore, Bashio is used by the
-[ApexOS Community Apps project][repository], those apps will be
+[ApexOS Community Add-ons project][repository], those apps will be
 a great resource of practical examples.
 
 ### Deprecation: `addon` renamed to `app`
@@ -134,7 +134,7 @@ Got questions?
 
 You have several options to get them answered:
 
-- The [ApexOS Community Apps Discord chat server][discord] for app
+- The [ApexOS Community Add-ons Discord chat server][discord] for app
   support and feature requests.
 - You could also [open an issue here][issue] GitHub.
 

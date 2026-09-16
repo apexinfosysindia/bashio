@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ApexOS Community Apps: Bashio
+# ApexOS Community Add-ons: Bashio
 # Test helper: loads the bashio library so its functions are available to tests.
 # ==============================================================================
 
