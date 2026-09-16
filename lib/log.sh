@@ -1,25 +1,51 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# ApexOS Community Apps: Bashio
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
-# Unless $LOG_FD is already set to a valid fd
-if ! [[ "${LOG_FD-}" =~ ^[0-9]+$ ]] || ! { : >&"${LOG_FD-2}"; } 2>/dev/null; then
-  # Preserve the original STDOUT on a free fd (stored in $LOG_FD) so that we can
-  # log to it without interfering with the STDOUT of subshells whose output we
-  # want to capture for other purposes.
-  exec {LOG_FD}>&1
+# Unless $LOG_FD is already set to a valid fd.
+# Use a subshell so suppressing errors cannot temporarily occupy $LOG_FD.
+if ! [[ "${LOG_FD:-}" =~ ^[0-9]+$ ]] || ! (
+    exec 2>/dev/null
+    : >&"${LOG_FD:-}"
+); then
+    # Preserve the original STDOUT on a free fd (stored in $LOG_FD) so that we can
+    # log to it without interfering with the STDOUT of subshells or child processes
+    # whose output we want to capture for other purposes.
+    exec {LOG_FD}>&1
 fi
+# Export LOG_FD for use by child bashio processes.
+# This is done outside of the above conditional to ensure that LOG_FD is also
+# exported if it was already set without using `export`.
+export LOG_FD
+
+# ------------------------------------------------------------------------------
+# Redirects the $LOG_FD fd to a changed STDOUT.
+#
+# If an app script changed the STDOUT (after the $LOG_FD fd was redirected to
+# it, see above), this function redirects the $LOG_FD fd to the new STDOUT.
+#
+# App developers must call this function after changing the STDOUT if they
+# want the log functions to log to the new STDOUT.
+# ------------------------------------------------------------------------------
+function bashio::log.reinitialize_output() {
+    if [[ "${LOG_FD:-}" =~ ^[0-9]+$ ]] && (
+        exec 2>/dev/null
+        : >&"${LOG_FD}"
+    ); then
+        eval "exec ${LOG_FD}>&1"
+    fi
+}
 
 # ------------------------------------------------------------------------------
 # Log a message to output.
 #
 # Arguments:
-#   $1 Message to display
+#   $* Message to display
 # ------------------------------------------------------------------------------
 bashio::log() {
     local message=$*
@@ -31,7 +57,7 @@ bashio::log() {
 # Log a message to output (in red).
 #
 # Arguments:
-#   $1 Message to display
+#   $* Message to display
 # ------------------------------------------------------------------------------
 bashio::log.red() {
     local message=$*
@@ -43,7 +69,7 @@ bashio::log.red() {
 # Log a message to output (in green).
 #
 # Arguments:
-#   $1 Message to display
+#   $* Message to display
 # ------------------------------------------------------------------------------
 bashio::log.green() {
     local message=$*
@@ -55,7 +81,7 @@ bashio::log.green() {
 # Log a message to output (in yellow).
 #
 # Arguments:
-#   $1 Message to display
+#   $* Message to display
 # ------------------------------------------------------------------------------
 bashio::log.yellow() {
     local message=$*
@@ -67,7 +93,7 @@ bashio::log.yellow() {
 # Log a message to output (in blue).
 #
 # Arguments:
-#   $1 Message to display
+#   $* Message to display
 # ------------------------------------------------------------------------------
 bashio::log.blue() {
     local message=$*
@@ -79,7 +105,7 @@ bashio::log.blue() {
 # Log a message to output (in magenta).
 #
 # Arguments:
-#   $1 Message to display
+#   $* Message to display
 # ------------------------------------------------------------------------------
 bashio::log.magenta() {
     local message=$*
@@ -91,7 +117,7 @@ bashio::log.magenta() {
 # Log a message to output (in cyan).
 #
 # Arguments:
-#   $1 Message to display
+#   $* Message to display
 # ------------------------------------------------------------------------------
 bashio::log.cyan() {
     local message=$*
@@ -247,7 +273,7 @@ function bashio::log.level() {
         error)
             log_level="${__BASHIO_LOG_LEVEL_ERROR}"
             ;;
-        fatal|critical)
+        fatal | critical)
             log_level="${__BASHIO_LOG_LEVEL_FATAL}"
             ;;
         off)
@@ -255,6 +281,7 @@ function bashio::log.level() {
             ;;
         *)
             bashio::exit.nok "Unknown log_level: ${log_level}"
+            ;;
     esac
 
     export __BASHIO_LOG_LEVEL="${log_level}"

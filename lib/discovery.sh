@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# ApexOS Community Apps: Bashio
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -19,15 +19,19 @@ function bashio::discovery() {
     local config=${2}
     local payload
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    # The configuration object can carry credentials (for example MQTT broker
+    # username and password), so trace only the function name and the service,
+    # never the configuration payload.
+    bashio::log.trace "${FUNCNAME[0]}" "${service}"
 
-    payload=$(\
+    payload=$(
         bashio::var.json \
             service "${service}" \
-            config "^${config}" \
+            config "^${config}"
     )
 
-    bashio::api.supervisor "POST" "/discovery" "${payload}" ".uuid"
+    bashio::api.supervisor "POST" "/discovery" "${payload}" ".uuid" ||
+        return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }
 
@@ -40,7 +44,8 @@ function bashio::discovery() {
 function bashio::discovery.delete() {
     local uuid=${1}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
-    bashio::api.supervisor "DELETE" "/discovery/${uuid}"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
+    bashio::api.supervisor "DELETE" "/discovery/${uuid}" ||
+        return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }

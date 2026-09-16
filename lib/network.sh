@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317
 # ==============================================================================
-# ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# ApexOS Community Apps: Bashio
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -13,7 +13,7 @@
 # ------------------------------------------------------------------------------
 function bashio::network.reload() {
     bashio::log.trace "${FUNCNAME[0]}"
-    bashio::api.supervisor POST /network/reload
+    bashio::api.supervisor POST /network/reload || return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }
 
@@ -33,8 +33,13 @@ function bashio::network() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'network.info' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'network.info'; then
@@ -51,16 +56,25 @@ function bashio::network() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'network.info' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"
 }
 
 # ------------------------------------------------------------------------------
-# Returns if the Host have internet connectivity.
+# Returns if the Host has internet connectivity.
 # ------------------------------------------------------------------------------
 function bashio::network.host_internet() {
     bashio::log.trace "${FUNCNAME[0]}"
@@ -68,7 +82,7 @@ function bashio::network.host_internet() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns if the Supervisor have internet connectivity.
+# Returns if the Supervisor has internet connectivity.
 # ------------------------------------------------------------------------------
 function bashio::network.supervisor_internet() {
     bashio::log.trace "${FUNCNAME[0]}"
@@ -101,8 +115,13 @@ function bashio::network.interface() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != "network.interface.${interface}.info" ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists "network.interface.${interface}.info"; then
@@ -119,16 +138,25 @@ function bashio::network.interface() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != "network.interface.${interface}.info" ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"
 }
 
 # ------------------------------------------------------------------------------
-# Returns a name of the network interfaces.
+# Returns the name of the network interface.
 #
 # Arguments:
 #   $1 Interface name for this operation (optional)
@@ -154,16 +182,29 @@ function bashio::network.type() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns if the interface is enabled.
+# Returns or sets if the interface is enabled.
 #
 # Arguments:
 #   $1 Interface name for this operation (optional)
+#   $2 Set enabled state (optional)
 # ------------------------------------------------------------------------------
 function bashio::network.enabled() {
     local interface=${1:-'default'}
+    local enabled=${2:-}
 
     bashio::log.trace "${FUNCNAME[0]}"
-    bashio::network.interface "network.interface.${interface}.info.enabled" "${interface}" '.enabled'
+
+    if bashio::var.has_value "${enabled}"; then
+        if bashio::var.true "${enabled}"; then
+            enabled=$(bashio::var.json enabled "^true")
+        else
+            enabled=$(bashio::var.json enabled "^false")
+        fi
+        bashio::api.supervisor POST "/network/interface/${interface}/update" "${enabled}" || return "${__BASHIO_EXIT_NOK}"
+        bashio::cache.flush_all
+    else
+        bashio::network.interface "network.interface.${interface}.info.enabled" "${interface}" '.enabled'
+    fi
 }
 
 # ------------------------------------------------------------------------------
@@ -245,7 +286,7 @@ function bashio::network.ipv4_nameservers() {
 }
 
 # ------------------------------------------------------------------------------
-# Returns a list ipv6 nameservers of the network interfaces.
+# Returns a list of ipv6 nameservers of the network interfaces.
 #
 # Arguments:
 #   $1 Interface name for this operation (optional)
@@ -281,4 +322,48 @@ function bashio::network.ipv6_gateway() {
 
     bashio::log.trace "${FUNCNAME[0]}"
     bashio::network.interface "network.interface.${interface}.info.ipv6.gateway" "${interface}" '.ipv6.gateway'
+}
+
+# ------------------------------------------------------------------------------
+# Returns or sets the ipv4 json settings of the network interfaces.
+#
+# Arguments:
+#   $1 Interface name for this operation (optional)
+#   $2 Ipv4 interface settings (optional)
+# ------------------------------------------------------------------------------
+function bashio::network.ipv4() {
+    local interface=${1:-'default'}
+    local ipv4=${2:-}
+
+    bashio::log.trace "${FUNCNAME[0]}"
+
+    if bashio::var.has_value "${ipv4}"; then
+        ipv4=$(bashio::var.json ipv4 "^${ipv4}")
+        bashio::api.supervisor POST "/network/interface/${interface}/update" "${ipv4}" || return "${__BASHIO_EXIT_NOK}"
+        bashio::cache.flush_all
+    else
+        bashio::network.interface "network.interface.${interface}.info.ipv4" "${interface}" '.ipv4'
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Returns or sets the ipv6 json settings of the network interfaces.
+#
+# Arguments:
+#   $1 Interface name for this operation (optional)
+#   $2 Ipv6 interface settings (optional)
+# ------------------------------------------------------------------------------
+function bashio::network.ipv6() {
+    local interface=${1:-'default'}
+    local ipv6=${2:-}
+
+    bashio::log.trace "${FUNCNAME[0]}"
+
+    if bashio::var.has_value "${ipv6}"; then
+        ipv6=$(bashio::var.json ipv6 "^${ipv6}")
+        bashio::api.supervisor POST "/network/interface/${interface}/update" "${ipv6}" || return "${__BASHIO_EXIT_NOK}"
+        bashio::cache.flush_all
+    else
+        bashio::network.interface "network.interface.${interface}.info.ipv6" "${interface}" '.ipv6'
+    fi
 }

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# ApexOS Community Apps: Bashio
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ function bashio::services() {
     response="${config}"
     if bashio::var.has_value "${key}"; then
 
-        read -r -d '' query << QUERY
+        read -r -d '' query <<QUERY || true
             if (.${key} == null) then
                 null
             elif (.${key} | type == "string") then
@@ -78,10 +78,9 @@ QUERY
 function bashio::services.available() {
     local service=${1}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
-    if ! bashio::api.supervisor GET "/services/${service}" > /dev/null 2>&1;
-    then
+    if ! bashio::api.supervisor GET "/services/${service}" >/dev/null 2>&1; then
         return "${__BASHIO_EXIT_NOK}"
     fi
 
@@ -99,9 +98,10 @@ function bashio::services.publish() {
     local service=${1}
     local config=${2}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
-    bashio::api.supervisor "POST" "/services/${service}" "${config}"
+    bashio::api.supervisor "POST" "/services/${service}" "${config}" ||
+        return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }
 
@@ -114,7 +114,8 @@ function bashio::services.publish() {
 function bashio::services.delete() {
     local service=${1}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
-    bashio::api.supervisor "DELETE" "/services/${service}"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
+    bashio::api.supervisor "DELETE" "/services/${service}" ||
+        return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# ApexOS Community Apps: Bashio
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -16,7 +16,7 @@
 function bashio::fs.directory_exists() {
     local directory=${1}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if [[ -d "${directory}" ]]; then
         return "${__BASHIO_EXIT_OK}"
@@ -34,9 +34,27 @@ function bashio::fs.directory_exists() {
 function bashio::fs.file_exists() {
     local file=${1}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if [[ -f "${file}" ]]; then
+        return "${__BASHIO_EXIT_OK}"
+    fi
+
+    return "${__BASHIO_EXIT_NOK}"
+}
+
+# ------------------------------------------------------------------------------
+# Check whether or not a file exists and is non-empty (size > 0 bytes).
+#
+# Arguments:
+#   $1 Path to file
+# ------------------------------------------------------------------------------
+function bashio::fs.file_non_empty() {
+    local file=${1}
+
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
+
+    if [[ -s "${file}" ]]; then
         return "${__BASHIO_EXIT_OK}"
     fi
 
@@ -52,9 +70,9 @@ function bashio::fs.file_exists() {
 function bashio::fs.device_exists() {
     local device=${1}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
-    if [[ -d "${device}" ]]; then
+    if [[ -b "${device}" || -c "${device}" ]]; then
         return "${__BASHIO_EXIT_OK}"
     fi
 
@@ -70,7 +88,7 @@ function bashio::fs.device_exists() {
 function bashio::fs.socket_exists() {
     local socket=${1}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if [[ -S "${socket}" ]]; then
         return "${__BASHIO_EXIT_OK}"

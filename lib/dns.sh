@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# ApexOS Community Apps: Bashio
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -16,13 +16,13 @@
 function bashio::dns.update() {
     local version=${1:-}
 
-    bashio::log.trace "${FUNCNAME[0]}:" "$@"
+    bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::var.has_value "${version}"; then
         version=$(bashio::var.json version "${version}")
-        bashio::api.supervisor POST /dns/update "${version}"
+        bashio::api.supervisor POST /dns/update "${version}" || return "${__BASHIO_EXIT_NOK}"
     else
-        bashio::api.supervisor POST /dns/update
+        bashio::api.supervisor POST /dns/update || return "${__BASHIO_EXIT_NOK}"
     fi
     bashio::cache.flush_all
 }
@@ -32,7 +32,7 @@ function bashio::dns.update() {
 # ------------------------------------------------------------------------------
 function bashio::dns.reset() {
     bashio::log.trace "${FUNCNAME[0]}"
-    bashio::api.supervisor POST /dns/reset
+    bashio::api.supervisor POST /dns/reset || return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }
 
@@ -41,7 +41,25 @@ function bashio::dns.reset() {
 # ------------------------------------------------------------------------------
 function bashio::dns.restart() {
     bashio::log.trace "${FUNCNAME[0]}"
-    bashio::api.supervisor POST /dns/restart
+    bashio::api.supervisor POST /dns/restart || return "${__BASHIO_EXIT_NOK}"
+    bashio::cache.flush_all
+}
+
+# ------------------------------------------------------------------------------
+# Sets the DNS plugin options.
+#
+# Arguments:
+#   $1 Options object (JSON)
+# ------------------------------------------------------------------------------
+function bashio::dns.options() {
+    local options=${1}
+
+    # The options object is an opaque caller-provided payload, so trace only
+    # the function name, never the payload itself.
+    bashio::log.trace "${FUNCNAME[0]}"
+
+    bashio::api.supervisor POST /dns/options "${options}" ||
+        return "${__BASHIO_EXIT_NOK}"
     bashio::cache.flush_all
 }
 
@@ -69,8 +87,13 @@ function bashio::dns() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'dns.info' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'dns.info'; then
@@ -87,9 +110,18 @@ function bashio::dns() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'dns.info' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"
@@ -159,8 +191,13 @@ function bashio::dns.stats() {
     bashio::log.trace "${FUNCNAME[0]}" "$@"
 
     if bashio::cache.exists "${cache_key}"; then
-        bashio::cache.get "${cache_key}"
-        return "${__BASHIO_EXIT_OK}"
+        # The base key holds the unfiltered blob, so only serve it from the
+        # cache when no filter is requested; a filtered call must recompute.
+        if [[ "${cache_key}" != 'dns.stats' ]] ||
+            ! bashio::var.has_value "${filter}"; then
+            bashio::cache.get "${cache_key}"
+            return "${__BASHIO_EXIT_OK}"
+        fi
     fi
 
     if bashio::cache.exists 'dns.stats'; then
@@ -177,9 +214,18 @@ function bashio::dns.stats() {
     response="${info}"
     if bashio::var.has_value "${filter}"; then
         response=$(bashio::jq "${info}" "${filter}")
+        if [ "$?" -ne "${__BASHIO_EXIT_OK}" ]; then
+            bashio::log.error "Failed to execute the jq filter"
+            return "${__BASHIO_EXIT_NOK}"
+        fi
     fi
 
-    bashio::cache.set "${cache_key}" "${response}"
+    # Never overwrite the base blob with a filtered result: the
+    # base blob is already cached above, so only cache under a distinct
+    # caller-provided key.
+    if [[ "${cache_key}" != 'dns.stats' ]]; then
+        bashio::cache.set "${cache_key}" "${response}"
+    fi
     printf "%s" "${response}"
 
     return "${__BASHIO_EXIT_OK}"

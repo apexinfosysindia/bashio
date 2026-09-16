@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ApexOS Community Add-ons: Bashio
-# Bashio is a bash function library for use with ApexOS add-ons.
+# ApexOS Community Apps: Bashio
+# Bashio is a bash function library for use with ApexOS apps.
 #
 # It contains a set of commonly used operations and can be used
-# to be included in add-on scripts to reduce code duplication across add-ons.
+# to be included in app scripts to reduce code duplication across apps.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -37,7 +37,7 @@ function bashio::pwned.is_safe_password() {
 # Arguments:
 #   $1 The password to check
 # ------------------------------------------------------------------------------
-function bashio::pwned.occurances() {
+function bashio::pwned.occurrences() {
     local password="${1}"
     local occurrences
 
@@ -49,6 +49,15 @@ function bashio::pwned.occurances() {
 
     echo -n "${occurrences}"
     return "${__BASHIO_EXIT_OK}"
+}
+
+# ------------------------------------------------------------------------------
+# Deprecated alias for bashio::pwned.occurrences.
+# ------------------------------------------------------------------------------
+function bashio::pwned.occurances() { # codespell:ignore occurances
+    bashio::log.warning \
+        "${FUNCNAME[0]} is deprecated, use bashio::pwned.occurrences instead."
+    bashio::pwned.occurrences "$@"
 }
 
 # ------------------------------------------------------------------------------
@@ -64,29 +73,30 @@ function bashio::pwned() {
     local hibp_hash
     local count
 
-    bashio::log.trace "${FUNCNAME[0]}" "${password//./x}"
+    bashio::log.trace "${FUNCNAME[0]}" "<REDACTED PASSWORD>"
 
     # Do not check empty password
-    if ! bashio::var.has_value "${password}"; then
+    if [[ -z "${password}" ]]; then
         bashio::log.warning 'Cannot check empty password against HaveIBeenPwned.'
         return "${__BASHIO_EXIT_NOK}"
     fi
 
     # Hash the password
-    password=$(echo -n "${password}" \
-        | sha1sum \
-        | tr '[:lower:]' '[:upper:]' \
-        | awk -F' ' '{ print $1 }'
+    password=$(
+        echo -n "${password}" |
+            sha1sum |
+            tr '[:lower:]' '[:upper:]' |
+            awk -F' ' '{ print $1 }'
     )
-    bashio::log.debug "Password SHA1: ${password}"
 
     # Check with have I Been Pwned, only send the first 5 chars of the hash
-    if ! response=$(curl \
-        --silent \
-        --show-error \
-        --write-out '\n%{http_code}' \
-        --request GET \
-        "${__BASHIO_HIBP_ENDPOINT}/${password:0:5}"
+    if ! response=$(
+        curl \
+            --silent \
+            --show-error \
+            --write-out '\n%{http_code}' \
+            --request GET \
+            "${__BASHIO_HIBP_ENDPOINT}/${password:0:5}"
     ); then
         bashio::log.debug "${response}"
         bashio::log.error "Something went wrong contacting the HIBP API"
